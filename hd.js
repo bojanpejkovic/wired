@@ -1,3 +1,4 @@
+
 const $ = document.querySelector.bind(document);
 const onEv = (s,ev,f) => {
     if(s !== 'document')
@@ -6,24 +7,27 @@ const onEv = (s,ev,f) => {
         document.addEventListener(ev, f);
 }
 const gc = (el) => el.getContext('2d');
+const ce = document.createElement.bind(document);
 
-let game = new Game();
 
-onEv('.btnMove', 'click', function(e){
+onEv('#bm canvas', 'click', function(e){
     let w = e.target.id.substr(7,1);
     game.buttonInput(w);
 });
 onEv('document', "keyup", function(event) {
     game.keyboardInput(event.keyCode);
 });
-onEv('#moveBtnNET', 'click', function(){
+onEv('#moveBtnNET', 'click', ()=>{
     game.toggleNet();
 });
-onEv('#moveBtnRA', 'click', function(){
+onEv('#moveBtnRA', 'click', ()=>{
     game.toggleEnemy(); 
 });
-onEv('#inst_wrap', 'click', function(){
+onEv('#inst_wrap', 'click', ()=>{
     $('#inst_wrap').style = 'display:none';
+});
+onEv('#moveBtnS', 'click', ()=>{
+    game.toggleSound();
 });
 
 function Game(){
@@ -54,17 +58,17 @@ function Game(){
     const canvasWidth = 600, canvasHeight = 600;
     const mapSizeR = 6, mapSizeC = 12;
     const map = [
-        "W.......2....|..5.....Y", 
+        "X.......2....|..5.....Y", 
         "---|--|---|-", 
-        "..E|7............|....A", 
+        "..A|7............|....E", 
         "|----|---|--", 
-        "....................F..", 
+        "....................B..", 
         "|----|-|--|-", 
-        ".....|B....|...........", 
+        ".....|F....|...........", 
         "-|---|-|----", 
         "3...........6|.........",
         "-|---|-|----",
-        "X.....G|1.........C...Z"
+        "W.....C|1.........G...Z"
     ];
     const x0 = 5, y0 = 5; 
     const wCellpx = 50, hCellpx = 50;
@@ -74,24 +78,28 @@ function Game(){
     let htmlMoves = $('#movesleft');
     const convsDiv =  $('#conversation');
     const GI = $('#gameinfo');
+    let audioctx = new (window.AudioContext || window.webkitAudioContext)();
+    let note = new Sound(audioctx);
+    let soundfx = true;
     let cGamesFinished = 0;
     let allTOplays = [];
     let firstTime = true;
+    let spikesEl = 8, outerRadiusEl = 10, innerRadiusEl = 6;
     
     let allAvPaths = [];
     let succPath = '';
     const mapctx = gc( $('#cnvMap') );
     const netctx = gc( $('#cnvNet') );
     const elctx = gc( $('#cnvEl') );
-    const bkcwctx = gc( $('#bckWired') );
+    const bcknight = gc( $('#bckNight') );
     const dicecnv = $('#cnvDice');
     const dicectx = gc( dicecnv );
-    const btnsL = ['R', 'L',  'U', 'D', 'E', 'G', 'NET', 'I', 'RA'], btnsctx = {};
-    for(let i=0;i<9;i++)
+    const btnsL = ['R', 'L',  'U', 'D', 'E', 'G', 'NET', 'I', 'RA', 'S'], btnsctx = {};
+    for(let i=0;i<btnsL.length;i++)
         btnsctx[btnsL[i]] = gc( $('#moveBtn'+btnsL[i]) );
+    drawBckg();
     drawButtons();
     loadInstructions();
-    drawWiredBck(bkcwctx);
     initConversation();
 
     (function initMap(){
@@ -184,15 +192,14 @@ function Game(){
     **  Game
     **
     ********************************************************************/
-    this.newGame = newGame;
     let netVis = false;
     //expose
-    this.toggleNet = function(){
+    function toggleNet(){
         netVis = !netVis;
-        netctx.clearRect(0, 0, canvasWidth, canvasHeight);
-        if(netVis) tableFields(netctx);
+        if(netVis) tableFields();
+        else netctx.clearRect(0,0,canvasWidth,canvasHeight);
     }
-    this.toggleEnemy = function(){
+    function toggleEnemy(){
         if(!enemyPick){ 
             var a = confirm('You can change opponent only if you finish the game or resign. '+
                     'Do you want to resign?');
@@ -204,10 +211,10 @@ function Game(){
         enemyPick = true;
     }
     let userKeyInput = "";
-    this.buttonInput = function(w){
+    function buttonInput(w){
         userInput(w);
     }
-    this.keyboardInput = function(key){
+    function keyboardInput(key){
         let char = String.fromCharCode(key);
         userKeyInput += char;
         if(userKeyInput.toUpperCase().indexOf('YES') >= 0){
@@ -270,7 +277,7 @@ function Game(){
         let cr = players[plNo].movePlayer(where);
         if(mapCoins[cr[0]][cr[1]] === nextCoin[plNo]){
             writeLetter(nextCoin[plNo], "", cr[0], cr[1], false);
-            players[plNo].distance = 0;
+            players[plNo].setDistance(0);
             prevCoin[plNo] = nextCoin[plNo];
             if(nextCoin[plNo] === lastCoin[plNo]){
                 if(players[plNo].canKill === false){
@@ -326,7 +333,7 @@ function Game(){
                 if(elNow == true){
                     if(players[army[markedArmy][markedPlayer]].canKill === false){
                         players[plNo].drawPlayerCoords(coordsE[0], coordsE[1]);
-                        players[plNo].distance = 0;
+                        players[plNo].setDistance(0);
                     }else{
                         players[plNo].playerDied();
                         checkGameEnd(army[markedArmy][markedPlayer]);
@@ -387,7 +394,7 @@ function Game(){
             for(let i=0; i<elecPls.length; i++){
                 let coords = mapLegend[prevCoin[elecPls[i]]];
                 players[elecPls[i]].drawPlayerCoords(coords[0], coords[1]);
-                players[elecPls[i]].distance = 0;
+                players[elecPls[i]].setDistance(0);
             }
         else
             for(let i=0; i<elecPls.length; i++){
@@ -396,8 +403,6 @@ function Game(){
             }
         if(elecPls.length > 0)
             if(elecPls[0]<3) setConv('meElectr', elecPls[0]);
-            else setConv('enemyElectr', elecPls[0]);
-
         endMove();
     }
 
@@ -672,6 +677,33 @@ function Game(){
         mapctx.stroke();
     }
 
+
+
+
+    /********************************************************************
+    **
+    **  DRAWING CANVAS
+    **
+    ********************************************************************/
+    function drawBckg(){
+        let canvas=$("#bckNight");
+        let w = window.innerWidth, h = window.innerHeight;
+        canvas.width = w;
+        canvas.height = h;
+        let ctx=bckNight.getContext("2d");
+        let grd=ctx.createRadialGradient(w/2,h/2,300,w/2,h/2,w*2/3);
+        grd.addColorStop(0, "#EFEFEF" );
+        grd.addColorStop(1,"gray"); 
+        ctx.fillStyle=grd;
+        ctx.fillRect(0,0,w,h);
+        let len = rn(10,10);
+        for(let i=0;i<len;i++){
+            drawStar(ctx, rn(w/2-300,10), rn(h-10,10), (Math.random() * 3));
+            drawStar(ctx, rn(w/2-300,w/2+300), rn(h-10,10), (Math.random() * 3));
+        }
+        drawWiredBck();
+    }
+
     function drawButtons(){
         let wB = 40, hB = 40;
         for(let i=0;i<4;i++){
@@ -700,7 +732,7 @@ function Game(){
             handDrawLine(btnsctx[l], wB/2, b, wB/4, hB/2);
             handDrawLine(btnsctx[l], wB/2, b, wB*3/4, hB/2);
         }
-        for(let i=4;i<9;i++){
+        for(let i=4;i<btnsL.length;i++){
             let l = btnsL[i];
             btnsctx[l].beginPath();
             btnsctx[l].fillStyle = 'Gainsboro';
@@ -710,6 +742,7 @@ function Game(){
         }
         btnsctx.G.strokeText("NEW GAME",34,20);
         btnsctx.NET.strokeText("NET on/off",37,20);
+        btnsctx.S.strokeText("SOUND on/off",27,20);
         btnsctx.E.strokeText("PICK player",37,20);
         btnsctx.I.strokeText("INSTRUCTIONS",23,20);
         btnsctx.RA.strokeText("Enemy:",5,10);
@@ -733,38 +766,36 @@ function Game(){
         handDrawCircle(btnsctx.RA, 55, 20, 5);
         btnsctx.RA.stroke();
     }
-    function drawWiredBck(ctx){
-        let fH = 140, fW = 60;
+    function drawWiredBck(){
+        let ctx=bcknight;
+        let w = window.innerWidth, h = window.innerHeight;
+        let fH = 2.5*(w/2-300)/10, fW = (w/2-300)/10;
         ctx.beginPath();
-        ctx.strokeStyle = "#DEDEDE";
-        let x0 = 30, y0 = 140, pomX = 5;
-        let xp0 = 30, yp0 = 140;
+        ctx.strokeStyle = "#eee";
+        let x0 = 0, y0 = 0, pomX = 5;
+        let xp0 = x0, yp0 = y0;
         for(let i=0; i<5; i++){
-          //W
-          handDrawLine(ctx, xp0, y0, xp0+fW/2, y0+fH);
-          handDrawLine(ctx, xp0+fW/2, y0+fH, xp0+fW, y0+fH/2);
-          handDrawLine(ctx, xp0+fW, y0+fH/2, xp0+fW+fW/2, y0+fH);
-          handDrawLine(ctx, xp0+fW+fW/2, y0+fH, xp0+fW*2, y0);
-          //I
-          handDrawLine(ctx, xp0+fW*3, y0, xp0+fW*3, y0+fH);
-          //R
-          handDrawLine(ctx, xp0+fW*4, y0, xp0+fW*4, y0+fH);
-          handDrawLine(ctx, xp0+fW*4.5, y0+fH/2, xp0+fW*5, y0+fH);
-          handDrawCircle(ctx, x0+fW*4.5, y0+fH/4, fH/4-(i*pomX));
-          //E
-          handDrawLine(ctx, xp0+fW*6, y0, xp0+fW*6, y0+fH);
-          handDrawLine(ctx, x0+fW*6, yp0, x0+fW*7, yp0);
-          handDrawLine(ctx, x0+fW*6, y0+fH/2-(i-2)*pomX, 
-                      x0+fW*6+fW*3/4,  y0+fH/2-(i-2)*pomX);
-          handDrawLine(ctx, x0+fW*6, y0+fH-i*pomX, x0+fW*7, y0+fH-i*pomX);
-          //D
-          handDrawLine(ctx, xp0+fW*7.5, y0, xp0+fW*7.5, y0+fH);
-          handDrawLine(ctx, x0+fW*7.5, yp0, x0+fW*7.5+fW/2, yp0);
-          handDrawLine(ctx, x0+fW*7.5, y0+fH-i*pomX, x0+fW*7.5+fW/2, y0+fH-i*pomX);
-          //samo jos polukrug
-          handDrawCircle(ctx, x0+fW*7.5+fW/3, y0+fH/2, fH/2-(i*pomX), .75, 1);
-          handDrawCircle(ctx, x0+fW*7.5+fW/3, y0+fH/2, fH/2-(i*pomX), 0, .25);
-          xp0+=pomX; yp0+=pomX;
+            //W
+            let y1 = [y0,y0+fH,y0+fH/2,y0+fH], x1 = xp0;
+            for(let j=0;j<4;j++){
+                handDrawLine(ctx, x1, y1[j], x1+fW/2, y1[3-j]); x1 += fW/2;
+            }
+            let p = [3,4,6,7.5];
+            for(let j=0;j<4;j++)
+                handDrawLine(ctx, xp0+fW*p[j], y0, xp0+fW*p[j], y0+fH);
+            //R
+            handDrawLine(ctx, xp0+fW*4.5, y0+fH/2, xp0+fW*5, y0+fH);
+            handDrawCircle(ctx, x0+fW*4.5, y0+fH/4, fH/4-(i*pomX));
+            //E
+            y1 = [yp0,y0+fH/2-(i-2)*pomX,y0+fH-i*pomX]
+            for(let j=0;j<3;j++)
+                handDrawLine(ctx, x0+fW*6, y1[j], x0+fW*(7-(j%2)*0.25), y1[j]);
+            //D
+            for(let j=0;j<3;j+=2)
+                handDrawLine(ctx, x0+fW*7.5, y1[j], x0+fW*7.5+fW/2, y1[j]);
+            handDrawCircle(ctx, x0+fW*7.5+fW/3, y0+fH/2, fH/2-(i*pomX), .75, 1);
+            handDrawCircle(ctx, x0+fW*7.5+fW/3, y0+fH/2, fH/2-(i*pomX), 0, .25);
+            xp0+=pomX; yp0+=pomX;
         }
         ctx.stroke();
     }
@@ -773,8 +804,7 @@ function Game(){
     **  ELECTRIFY PLAYER
     **
     ********************************************************************/
-    let spikesEl = 8, outerRadiusEl = 10, innerRadiusEl = 6;
-    function drawElectr(cx,cy,scaleEl){
+    function drawStar(ctx, cx,cy,scaleEl){
         if(!scaleEl) scaleEl = 1;
         let outerRadius = outerRadiusEl * scaleEl;
         let innerRadius = innerRadiusEl * scaleEl;
@@ -782,27 +812,28 @@ function Game(){
         let step=Math.PI/spikesEl;
 
         let x = cx, y = cy;
-        elctx.clearRect(0, 0, canvasWidth, canvasHeight);
-        elctx.beginPath();
-        elctx.moveTo(cx,cy-outerRadius)
+        if(ctx == elctx)
+            ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+        ctx.beginPath();
+        ctx.moveTo(cx,cy-outerRadius)
         for(i=0;i<spikesEl;i++){
             x=cx+Math.cos(rot)*outerRadius;
             y=cy+Math.sin(rot)*outerRadius;
-            elctx.lineTo(x,y);
+            ctx.lineTo(x,y);
             rot+=step;
 
             x=cx+Math.cos(rot)*innerRadius;
             y=cy+Math.sin(rot)*innerRadius;
-            elctx.lineTo(x,y)
+            ctx.lineTo(x,y)
             rot+=step;
         }
-        elctx.lineTo(cx,cy-outerRadius);
-        elctx.closePath();
-        elctx.lineWidth=3;
-        elctx.strokeStyle='#FFFF00';
-        elctx.stroke();
-        elctx.fillStyle='#FFFFcc';
-        elctx.fill();
+        ctx.lineTo(cx,cy-outerRadius);
+        ctx.closePath();
+        ctx.lineWidth=3;
+        ctx.strokeStyle='#FFFF00';
+        ctx.stroke();
+        ctx.fillStyle='#FFFFcc';
+        ctx.fill();
     }
 
     function moveElectr(r, c, er, ec){
@@ -822,7 +853,8 @@ function Game(){
     function animateEl(cx,cy,scaleEl,endElX, endElY ){
         if(scaleEl > 1) scaleEl = 1;
         else scaleEl = 2;
-        drawElectr(cx+moveElIncX, cy+moveElIncY, scaleEl);
+        if(scaleEl==1) playSound('elec');
+        drawStar(elctx, cx+moveElIncX, cy+moveElIncY, scaleEl);
         if((moveElIncX>0 && cx>=endElX) || (moveElIncX<0 && cx<=endElX) ||
             (moveElIncY>0 && cy>=endElY) || (moveElIncY<0 && cy<=endElY)){
             drawElectrPlayer(endElX,endElY);
@@ -837,7 +869,7 @@ function Game(){
 
 
     function drawElectrPlayer(cx,cy){
-        drawElectr(cx, cy - (hCellpx/2), 3);
+        drawStar(elctx, cx, cy - (hCellpx/2), 3);
         let clr = "white";
         let elInt = setInterval(()=> {
             clr = (clr === 'white')? "black" : "white"; 
@@ -948,14 +980,18 @@ function Game(){
         let moveEndX, moveEndY;
         let moveInterval;
         let moveInProgress = -1;
-        this.distance = 0;
+        let distance = 0;
+        this.setDistance = function(d){ distance = d; }
+        this.getDistance = function(){ return distance; }
 
         //expose
-        (this.setColor = function(clr){
+        this.setColor = function(clr){
             ctxpp.strokeStyle = 'black';
             ctxpp.fillStyle = clr;
-        })(clr);
-        this.getCoords = function(){
+        };
+        this.setColor(clr);
+
+        this.getCoords = ()=>{
             return [rpp, cpp];
         }
         this.setCoords = function(r,c){
@@ -970,7 +1006,7 @@ function Game(){
                 let er = (where == 'U')? rpp-1 : rpp+1;
                 movePlayerUD(er);
             }
-            this.distance++;
+            distance++;
             return [rpp, cpp];
         }
         this.removePlayer = function(){
@@ -1024,14 +1060,14 @@ function Game(){
             ctxpp.fillStyle = clrpp;
             ctxpp.fill();
             let endY = y + hCellpx / 3;
-            //body
-            handDrawLine(ctxpp, x, y, x, endY);
-            //legs
-            handDrawLine(ctxpp, x, endY, x-8, endY + hCellpx / 3);
-            handDrawLine(ctxpp, x, endY, x+8, endY + hCellpx / 3);
-            //arms
-            handDrawLine(ctxpp, x, y+(hCellpx / 6)+5, x-8, y+(hCellpx / 6)+10);
-            handDrawLine(ctxpp, x, y+(hCellpx / 6)+5, x+8, y+(hCellpx / 6)+10);
+            let y1 = y;
+            let yd = hCellpx / 3;
+            for(let i=0;i<5;i++){
+                if(i>2){ y1=y+(hCellpx / 6)+5; yd=5; }
+                let xl = x+(-2*(i%2)*8)+(+(i>0))*8;
+                handDrawLine(ctxpp, x, y1, xl, y1 + yd);
+                if(i%2==0) y1+=yd;
+            }
             ctxpp.stroke();
         }
 
@@ -1076,7 +1112,7 @@ function Game(){
             plAbsMove = 0; 
             plAbsMoveInc = (oldcpp > cpp)? -3 : 3;
             moveInProgress = (oldcpp > cpp)? 1 : 2;
-            moveInterval = setInterval(function(){
+            moveInterval = setInterval(()=>{
                 drawPlayerMoveLR();
             }, 50);
         }
@@ -1100,8 +1136,6 @@ function Game(){
             handDrawLine(ctxpp, x, endY, x-1, endY+1);
             handDrawLine(ctxpp, x, endY, x+1, endY+1);
             //arms
-            //handDrawLine(ctxpp, x-maxlegPosX, y+rad+5, x+maxlegPosX, y+rad+5);
-            //arms
             let bodyLen = endY - (y+rad);
             let elbY = y+rad+bodyLen/3;
             handDrawLine(ctxpp, x, y+rad, x + maxlegPosX*2/3, elbY );
@@ -1120,7 +1154,7 @@ function Game(){
             plAbsMove = 0; 
             plAbsMoveInc = (oldrpp > rpp)? -5 : 5;
             moveInProgress = (oldrpp > rpp)? 3 : 4;
-            moveInterval = setInterval(function(){
+            moveInterval = setInterval(()=>{
                 drawPlayerMoveUpDown();
             }, 50);   
         }
@@ -1130,6 +1164,7 @@ function Game(){
             if(moveInProgress > 0) drawPlayerCoords(rpp, cpp);
         }
 
+       
     };
 
 
@@ -1144,27 +1179,16 @@ function Game(){
 
                 let myctx = ctx;
                 let myclr = clr;
-                this.drawFace = drawFace;
-                this.blink = blink;
-                this.blinkTwice = blinkTwice;
-                this.smileShake = smileShake;
-                this.canvas = function(){
-                    return myctx.canvas;
-                    //someCtx.drawImage(faces[i].canvas, 0, 0);
-                }
-                this.setCanvas = function(ctx){
-                    myctx = ctx;
-                }
+
                 function drawFace(face, gRnd, blinkPos){ 
                     myctx.clearRect(0,0,wC,hC);
                     myctx.beginPath();
                     //head-circle
-                    handDrawCircle(myctx, center[0], center[1], wC/2 -2);
-                    myctx.arc(center[0], center[1], wC/2 -3, 0, 2 * Math.PI, false);
+                    hdfCircle(myctx, center[0], center[1], wC/2 -2);
                     myctx.fillStyle = myclr;
                     myctx.fill();
                     //nose
-                    handDrawCircle(myctx, center[0], center[1], 1);
+                    myctx.fillRect(center[0], center[1],1,1);
                     myctx.stroke();
                     //eyes
                     if(!gRnd){
@@ -1174,30 +1198,17 @@ function Game(){
                         handDrawCircle(myctx, wC/4+gRnd[0], hC/4+2+gRnd[1], 6);
                         handDrawCircle(myctx, 3*wC/4+gRnd[2], hC/4+2+gRnd[3], 6);
                         myctx.stroke();
+                    }
+                    let j = (blinkPos==undefined)? 2 : 1;
+                    myctx.fillStyle = 'white';
+                    for(let i=0;i<2;i++){
                         myctx.beginPath();
-                        myctx.arc(wC/4+gRnd[0], hC/4+2+gRnd[1], 5, 0, 2 * Math.PI, false);
-                        myctx.fillStyle = 'white';
-                        myctx.fill();
-                        myctx.stroke();
-                        myctx.beginPath();
-                        myctx.arc(3*wC/4+gRnd[2], hC/4+2+gRnd[3], 5, 0, 2 * Math.PI, false);
-                        myctx.fill();
-                        myctx.stroke();
-                    }else{
-                        myctx.beginPath();
-                        myctx.arc(wC/4+gRnd[0], hC/4+2+gRnd[1], 5, 0, Math.PI);
-                        myctx.quadraticCurveTo(wC/4, hC/4-8 + blinkPos, wC/4+5+gRnd[0], hC/4+2+gRnd[1])
-                        myctx.fillStyle = 'white';
-                        myctx.fill();
-                        myctx.stroke();
-                        
-                        myctx.beginPath();
-                        myctx.arc(3*wC/4+gRnd[2], hC/4+2+gRnd[3], 5, 0, Math.PI);
-                        myctx.quadraticCurveTo(3*wC/4, hC/4-8 + blinkPos, 3*wC/4+5+gRnd[2], hC/4+2+gRnd[3])
+                        myctx.arc((i*2+1)*wC/4+gRnd[i*2], hC/4+2+gRnd[i*2+1], 5, 0, j * Math.PI);
+                        if(blinkPos!==undefined)
+                            myctx.quadraticCurveTo((i*2+1)*wC/4, hC/4-8 + blinkPos, (i*2+1)*wC/4+5+gRnd[i*2], hC/4+2+gRnd[i*2+1])
                         myctx.fill();
                         myctx.stroke();
                     }
-                    
 
                     myctx.beginPath();
                     if(face===0) normal();
@@ -1272,6 +1283,11 @@ function Game(){
                     blink(face);
                     setTimeout(()=> blink(face), 700);
                 }
+                return {
+                    drawFace : drawFace,
+                    blinkTwice : blinkTwice,
+                    smileShake : smileShake
+                }
     }
 
 
@@ -1283,6 +1299,7 @@ function Game(){
     **  Conversations
     **
     ********************************************************************/
+
     function shuffleArray(array) {
         for (let i = array.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
@@ -1296,11 +1313,12 @@ function Game(){
         }
 
         //setConv('smallTalk2');
-        setConv('helloConv');
+        setTimeout(()=>setConv('helloConv'), 2000);
     }
     
     function setConv(name, plNoEl){
         if(convInProgress == true) return;
+        if(convs[name] === undefined){ console.log('und convs['+name+']'); return; }
         let cnt = convs[name].counter;
         if((++convs[name].counter) >= convs[name].length){ 
             convs[name].counter = 0;
@@ -1310,21 +1328,21 @@ function Game(){
         }
         let txt = '';
         if(Array.isArray(convs[name][cnt])){
-            convInProgress = true; let lastTime = -2000;
+            convInProgress = true; let lastTime = -2000, lastPlNo=0;
             for(let i=0; i<convs[name][cnt].length; i++){
                 [txt, face, plNo, time, nextConv, anim] = getLineConv( convs[name][cnt][i] );
-                if(!plNo){ plNo = (i%4==0)? 1:(i%4==3)? 2:i%4+2; }
+                if(!plNo) do{ plNo=rn(4,1); }while(plNo==lastPlNo);
+                lastPlNo = plNo;
                 if(!face) face = 0;
                 time = (!time)? lastTime + 2000 : lastTime + time*1000;
                 lastTime = time;
-                //addLineConv(plNo, txt, faceType, time, anim, animFaceType, animTime)
-                if(name == 'meElectr' || name == 'enemyElectr') plNo = plNoEl;
+                if(name == 'meElectr') plNo = plNoEl;
                 addLineConv(plNo, txt, face, time, anim, 3); 
             }
             setTimeout(()=>{ 
                 convInProgress = false; 
                 if(name === 'rulesMakeFun') 
-                    setTimeout(()=>setConv('rules'), 4000);
+                    setTimeout(()=>setConv('rules'), 8000);
                 else if(name === 'rules') 
                     setTimeout(()=>setConv('tactics'), 20000);
                 else if(name === 'outOfMemory') 
@@ -1338,7 +1356,7 @@ function Game(){
             console.log(name+' is not conversation.');
         }
     }
-    this.getLineConv = getLineConv;
+
     function getLineConv(str){
         let ind = str.indexOf('-');
         let txt = '', face, plNo, time, nextConv, anim;
@@ -1358,21 +1376,16 @@ function Game(){
                 for(let i=0;i<k;i++) 
                     txt += t;
             }
-            if(c == 'c'){
+            if(c == 'c')
                 [nextConv] = txtTillNextSpace(str.substr(2));
-            }
-            if(c == 't'){
+            if(c == 't')
                 time = parseFloat(str.substring(2, (str.indexOf(' ') >= 0)? str.indexOf(' ') : str.length));
-            }
-            if(c == 'p'){
+            if(c == 'p')
                 plNo = parseInt(str.substr(2, 1));
-            }
-            if(c == 'f'){
+            if(c == 'f')
                 face = parseInt(str.substr(2, 1));
-            }
-            if(c == 'a'){
+            if(c == 'a')
                 [anim] = txtTillNextSpace(str.substr(2));
-            }
             //cut str by the part that was processed
             let ns = str.indexOf(' ');
             str = (ns >= 0)? str.substr(ns) : '';
@@ -1392,10 +1405,10 @@ function Game(){
     }
     function addLineConv(plNo, txt, faceType, time, anim, animFaceType){
         setTimeout(()=> {
-            let div = document.createElement('div');
-            let div1 = document.createElement('div');
-            let div2 = document.createElement('div');
-            let canvas = document.createElement('canvas');
+            let div = ce('div');
+            let div1 = ce('div');
+            let div2 = ce('div');
+            let canvas = ce('canvas');
             canvas.id = "face"+(++convId);
             canvas.width = 30;
             canvas.height = 30;
@@ -1404,7 +1417,7 @@ function Game(){
             divOut.innerHTML = ' ';
             divIn.appendChild(canvas);
             if(txt!=''){
-                let span = document.createElement('span');
+                let span = ce('span');
                 span.append(txt);
                 divIn.appendChild(span);
             }
@@ -1415,6 +1428,7 @@ function Game(){
             var ctx = gc(canvas);
             let face = new Face(ctx, plColors[plNo]);
             face.drawFace(faceType);
+            playSound('chat');
             if(anim && animFaceType)
                 setTimeout( ()=>face[anim](animFaceType), 300);
         }, time);
@@ -1450,11 +1464,6 @@ function Game(){
         -2 wound weaker enemy
         -1 follow coin path 
         }
-
-
-        bUGS:
-        1 mrtav path is und
-        2.nije odigrao dva poteza
         */
     function cpuPlay(){
         if(diceNo > 0){
@@ -1483,9 +1492,9 @@ function Game(){
             plHC[i] = prevCoin[pl[i]].charCodeAt(0) - firstCoin[pl[i]].charCodeAt(0);
         }
         //get army player with higher coin or the one that is farther from his last coin
-        return  (plHC[0]-plHC[1] > 0)? pl[0] : 
-                (plHC[0]-plHC[1] < 0)? pl[1] : 
-                (players[pl[0]] > players[pl[1]])? pl[0] : pl[1];  
+        return  (plHC[0]>plHC[1])? pl[0] : 
+                (plHC[0]<plHC[1])? pl[1] : 
+                (players[pl[0]].getDistance() > players[pl[1]].getDistance())? pl[0] : pl[1];  
     }
 
     function getAllPathsForPlayer(plNo, ldiceNo, diceR){
@@ -1594,7 +1603,7 @@ function Game(){
         let last = (len>1)? rn(2,1) : 1, minDistance = 5;
         for(let k=0;k<allAvPaths.length;k++)
             if(coinPath.myPath.substr(0,len-last) == allAvPaths[k].myPath.substr(0,len-last)
-            && players[allAvPaths[k].plNo].distance > minDistance)  
+            && players[allAvPaths[k].plNo].getDistance() > minDistance)  
                 nPaths.push(allAvPaths[k]);
         return nPaths;
     }
@@ -1651,13 +1660,6 @@ function Game(){
         else
             nextCoin[plNo] = String.fromCharCode(nextCoin[plNo].charCodeAt(0)+1);
         players[plNo].setCoords(fromR,fromC);
-        //get new paths for wound
-        /*allAvPaths = [];
-        allAvailablePaths('',fromR,fromC,dice,true);
-        //get path for next coin
-        [goalR,goalC] = mapLegend[nextCoin[plNo]]; //coords of nextItem
-        let nc = findCpuCoinPath(plNo,goalR,goalC);
-        allAvPaths.push({plNo: -1, myPath: nc.substr(0,dice) });*/
         let nPaths = getAllPathsForPlayer(plNo,ldiceNo,dice);
         //set old data
         players[plNo].canKill = old1;
@@ -1733,9 +1735,9 @@ function Game(){
 
         prevCoin = [, 'W', 'X', 'Y', 'Z'];
         for(let i=1;i<=4;i++)
-        mapCoins[0][0] = "W";mapCoins[mapSizeR-1][0] = "X";
+        mapCoins[0][0] = "X";mapCoins[mapSizeR-1][0] = "W";
         mapCoins[0][mapSizeC-1] = "Y";mapCoins[mapSizeR-1][mapSizeC-1] = "Z";
-        mapLegend['W'] = [0,0];mapLegend['X'] = [mapSizeR-1,0];
+        mapLegend['X'] = [0,0];mapLegend['W'] = [mapSizeR-1,0];
         mapLegend['Y'] = [0,mapSizeC-1];mapLegend['Z'] = [mapSizeR-1,mapSizeC-1];
 
         let c=[], coords = [,[],[],[],[]], fc = [,[],[],[],[]], fail = 0; 
@@ -1813,4 +1815,83 @@ function Game(){
                         writeStart(plColors[c], i, j, true);
                 }
     }
+
+
+    /********************************************************************
+    **
+    **  SOUND
+    **
+    ********************************************************************/
+    function Sound(ctx){
+        let context = ctx;
+        let oscillator, gainNode;
+        this.play = function(value, osctype, t) {    
+            oscillator = context.createOscillator();
+            gainNode = context.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(context.destination);
+            oscillator.type = osctype; //'sine'|'square'|'triangle'|'sawtooth'
+            let now = context.currentTime;
+            oscillator.frequency.value = value;
+            gainNode.gain.setValueAtTime(1, now);            
+            oscillator.start(now);
+            stop(now, t);
+        }
+        function stop(time, t) {
+            gainNode.gain.exponentialRampToValueAtTime(0.001, time+t);
+            oscillator.stop(time+t);
+        }
+    }
+    function playSound(type){
+        if(!soundfx) return;
+        if(type=='chat')
+            note.play(188, 'sine', 0.4);
+        if(type == 'elec'){
+          setTimeout( ()=> { note.play(83.07, 'sawtooth', 0.3); }, 100);
+          setTimeout( ()=> { note.play(44.01, 'sawtooth', 0.3); }, 100+75);
+          setTimeout( ()=> { note.play(62.23, 'sawtooth', 0.3); }, 100+25);
+          setTimeout( ()=> { note.play(55.44, 'sawtooth', 0.3); }, 100+50);
+        }
+    }
+    function toggleSound(){
+        soundfx = !soundfx;
+    }
+    return {
+        newGame:newGame,
+        toggleNet:toggleNet,
+        toggleEnemy:toggleEnemy,
+        buttonInput:buttonInput,
+        keyboardInput:keyboardInput,
+        drawBckg:drawBckg,
+        toggleSound:toggleSound
+    }
 };
+
+let convs = {
+    smile: ["-rhe", "-rhi", "-rho", "-rha"],
+    makeFun: ["You dont have to play, realy, you already 'won', -qsmile", "Really.. dont offend, we are just joking a little bit, but you give us so much inspiration, -qsmile", "Are you stupid or something?", "This electricity is sooo bright. Brighter then you, -qsmile", "I guess who's not going to win this game, -qsmile"],
+    helloConv:[ ["-p1 -qhello", "-p3 -qhello", "-p4 -qhello", "-p2 -qhello", "-p1 Welcome to the game 'Wired'. Btw. we can talk to you but you can NOT talk to us. Do you understand?", "-t4 -p1 Type YES if you do."] ],
+    hello:["Hi","Hello","Bonjour","Yo!"],
+    rules:[ ["This is a turn by turn game. Your goal is to pick up all coins of your color in right order, which will get you an electroshocker, and kill your enemies. There are two teams, blue and red, and 2 players in each team. Yours is blue. In every turn you got two dices thrown, you move both players, and you can choose what player will play what dice.", "-t22 When you finish moves for one of the players, if some enemy player is on the same line (vertical or horizontal), you will electrify him, and he will go back to the field where he picked up his last coin. if he did not collect any coin, he will return to his 'Start' field.", "-t22 If you already complete all coins, you now have an electroshocker, then you will kill that enemy, and when you kill both of them, you are the winner.",
+        "-t20 If both enemy players can be electrified after your move, only the closer one will got hit. Which means, that you too can use one player for protection, and the other one to chase all coins", "-t20 Also, you can use keyboard - spaceor enter to pick a player and arrows to move.", "-t6 Now click 'New Game', then pick a pleyer, and move him."] ],
+    rulesMakeFun:[ ["-p1 He actually typed YES. -rhe", "-p4 -f1 -asmileShake -qsmile", "-p3 -f1 Are you stupid or something?", "-p2 OK, OK, OK, Remember you can NOT talk to us. Let us tell you the rules now..."] ],
+    tactics:[ 
+        ["-p2 Tell him about tactics.","-p1 -t3 Yeah, there are 3 types of tactics: 1.you can CHASE ELECTROSHOCKER with both of your players.","-p1 -t7 2.you can join them and put the one as a PROTECTION to your main player.","-p1 -t10 3.you can send one player just to ATTACK the enemy, and other to chase an electroshocker.", "-p3 -t10 Hey, i have a BETTER IDEA! Why dont you use one player to chase an electroshocker, but the other for ATTACK AND PROTECTION! Ha??", "-p2 -t10 I have an idea too! Why dont you use your other player to ATTACK AND CHASE an electroshocker!", "-p3 -t4 -f2 That's BRILLIANT!", "-p4 -t10 UOOOOU!! I just got the best idea EVER!", "-p1 -t2 What?", "-p3 -t1 What?", "-p2 -t1 What?", "-p4 -t7 I forgot. -ablinkTwice -f2", "-p2 -t2 -f3 -ablinkTwice"] ], 
+    smallTalk:[ 
+        ["Let me tell you a little about our God, THE DICER.", "-p1 -t5 He is the one that put the numbers on our dices, and the only one who have enough wisdom to do it right. ", "-p1 -t11 You may think that you get the random numbers on the dice, but actually He plans ahead what number will show you.", "-p4 -f2 -t5 -ablinkTwice", "-p1 -t5 With the provided number, you just move us around.","-p1 -t12 So now you think that you have a freedom to choose, and He wants you to feel that way...", "-p1 -t12 and now you think that you are the one in charge of everything...", "-p4 -t5 -f1 IN CHARGE, hehe, Get it?!", "-p3 -f1 -asmileShake -qsmile","-t2 -p1 -f2 Why do you have to ruin every story i say... oooohh."],
+        ["-p3 Do you know the rule for boring games?", "-p2 -t4 No.", "-p4 No.", "-p3 So this is for you my human friend: 'There are no boring games, just boring players!'", "-p4 -f1 -asmileShake -qsmile", "-p2 -f1 -asmileShake -qmakeFun"], 
+        ["-p1 Did you know, that when you are on the field where you took your last coin, electricity can NOT hurt you. ", "-t4 Really?", "-t2 -p1 Yea. You are, like, not on the wire line. Like you are OFFLINE.", "-p1 -t3 OFFLINE. Get it?!", "-p1 -ablinkTwice", "-p1 -t3 No you don't.", "-p3 This is a lame joke, dude.", "-p4 Yeah, really dude.", "-p2 I think that, his wife make him say it", "-p3 -f1 -asmileShake -qsmile", "-p4 -f1 -asmileShake -qsmile"] ],
+    outOfMemory: [ ["Out of memory", "Out of mem,&y", "..t o. m&,..", "..."] ],
+    wakeUp: [ ["-rA This was a good nap...", "-p1 -t5 Wake up guys!", "-t5 -p4 I'm up...but still sleepy", "-p2 -t10 -qhello , what's up?", "-t5 I see some guy playing.", "Oh.", "-t5 Wow, Who knows how long he plays this game.", "-t5 You are right, Helloooo, are you lost?", "Maybe he is stuck in this one game for days...", "-t5 He is like a lost soul maybe...", "Hey guy, do you need help?", "Maybe we should tell him the rules again?", "Yeah, we probably should..."] ],
+
+    newGame: [ ["New Game! Great!"] ],
+    winGame: [
+        ["-p1 -f1 -asmileShake WHOHOOO, WE WIN!", "-p2 -f1 -asmileShake YEEAAAAAAAAAAA!!", "-p4 Congratulations!", "-p3 Great job dude!"], 
+        ["-p1 -f1 -asmileShake Great job man!", "-p2 -f1 -asmileShake YEEAAAAAAAAAAA!!", "-p3 You are not as stupid, as you look...", "-p4 GG", "-p3 Play another if you're not afraid of losing."], 
+        ["-p1 -f1 -asmileShake TATARARATATATA!", "-p2 -f1 -asmileShake WOOOOOOOOO!!", "-p3 -f2 My vocabulary is very short, but i think some f word, or something.", "-p4 -f2 BLURP"] ,
+        ["-p1 -f1 -asmileShake Excelent game!", "-p2 -f1 -asmileShake You are AWESOME!!", "-p3 Dont be so full of yourself, we only have like 2kb of logic.", "-p4 He is right you know!", "-p3 -t1 -f2 -ablinkTwice"] ],
+    lostGame: [ ["Do you know that Guns'n'roses song: ", "Dont you cryyyyy tonight, i still love you baby...", "-f1 -asmileShake -qmakeFun", "-f1 -qsmile"], ["Wow, you lost on level easy..", "I guess that cant be done by anyone..", "-f1 -asmileShake -qmakeFun", "-csmile"], ["Good game dude!", "Now find some electricity and do what every loser needs to do with it.", "-f1 -asmileShake -qmakeFun", "-csmile"], ["Don't worry, this game is not about winning.", "Yeah, its about LOSING!", "-f1 -asmileShake -qmakeFun", "-csmile"] ],
+    meElectr: [ ["-f2 Hey, I have an idea. Why dont you go to the wall in your room... and put your fingers in two small holes in the wall, then you can say that you 'can feel our pain'."], [ "-f2 Thanks for this man, are you stupid or something?" ], ["-f2 This electricity is sooo bright. Brighter then you are."], ["-f2 I guess who's not going to win this game"], ["-f2 Thanks, i saw the light... aaaaaah" ], ["-f2 Why do you want to hurt me, what did i do to you??" ], ["-f2 O Dicer, save me from this man!"] ]
+}
+let game = new Game();
+window.onresize = game.drawBckg;

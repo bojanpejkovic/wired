@@ -1,4 +1,4 @@
-    html{overflow:hidden; }
+    html{ overflow:hidden; }
         body{
             text-align:center;
             background-color: #efeffe; 
@@ -33,8 +33,9 @@
 
             canvas.mapCnv{ position:absolute; top:200px; left:-300px; margin-left:50%; }
             #cnvMap{ border:1px solid black;}
+            #bckNight{  position:fixed; top:0; left:0; z-index:-1; }
 
-            .btnMove, #moveBtnNET, #moveBtnRA{ position:absolute; margin-top:540px; margin-left: 50%; border:0; }
+            .btnMove, #moveBtnNET, #moveBtnRA, #moveBtnS{ position:absolute; margin-top:540px; margin-left: 50%; border:0; }
             #moveBtnR{ left:22px; top:44px; }
             #moveBtnU{ top:0; left:-22px; }
             #moveBtnD{ top:44px; left:-22px;}
@@ -44,6 +45,7 @@
             #moveBtnI{ top:80px; left:-300px; }
             #moveBtnRA{ top:40px; left:-300px; }
             #moveBtnNET{ top:0px; left:150px; }
+            #moveBtnS{ top:44px; left:150px; }
 
             #inst_wrap{
                 position: fixed; top:0; left:0; width:100%; height:100%;
